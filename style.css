@@ -1,0 +1,54 @@
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0e1117;
+    color: white;
+}
+
+.container {
+    display: flex;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 220px;
+    height: 100vh;
+    background: #262730;
+    padding: 20px;
+}
+
+.sidebar h2 {
+    text-align: center;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar li {
+    padding: 12px;
+    margin: 10px 0;
+    background: #31333f;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.sidebar li:hover {
+    background: #44475a;
+}
+
+/* Content */
+.content {
+    flex: 1;
+    padding: 40px;
+}
+
+.page {
+    display: none;
+    font-size: 30px;
+}
+
+.active {
+    display: block;
+}
