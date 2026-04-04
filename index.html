@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>Menu</h2>
+        <ul>
+            <li onclick="showPage('home')">Home</li>
+            <li onclick="showPage('page1')">Page 1</li>
+            <li onclick="showPage('page2')">Page 2</li>
+        </ul>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <div id="home" class="page">🏠 Home Page</div>
+        <div id="page1" class="page">📊 Page 1 Dashboard</div>
+        <div id="page2" class="page">▶️ Page 2 Dashboard</div>
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
