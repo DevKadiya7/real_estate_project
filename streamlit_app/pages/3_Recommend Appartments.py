@@ -2,14 +2,73 @@ import streamlit as st
 import pickle
 import pandas as pd
 import numpy as np
+import ast
+import re
+from pathlib import Path
 
 st.set_page_config(page_title="Recommend Appartments")
 
-location_df = pickle.load(open('datasets/location_distance.pkl','rb'))
+BASE_DIR = Path(__file__).resolve().parents[1]
+APARTMENTS_PATH = BASE_DIR.parent / 'data_collection' / 'appartments.csv'
+COSINE_SIM1_PATH = BASE_DIR / 'datasets' / 'cosine_sim1.pkl'
+COSINE_SIM2_PATH = BASE_DIR / 'datasets' / 'cosine_sim2.pkl'
+COSINE_SIM3_PATH = BASE_DIR / 'datasets' / 'cosine_sim3.pkl'
 
-cosine_sim1 = pickle.load(open('datasets/cosine_sim1.pkl','rb'))
-cosine_sim2 = pickle.load(open('datasets/cosine_sim2.pkl','rb'))
-cosine_sim3 = pickle.load(open('datasets/cosine_sim3.pkl','rb'))
+def distance_to_meters(distance_str):
+    if pd.isna(distance_str):
+        return np.nan
+
+    distance_str = str(distance_str).strip()
+    if not distance_str:
+        return np.nan
+
+    match = re.search(r'([\d.]+)\s*([a-zA-Z]*)', distance_str.replace(',', ''))
+    if not match:
+        return np.nan
+
+    value = float(match.group(1))
+    distance_label = (match.group(2) or '').lower() or distance_str.lower()
+
+    if 'km' in distance_label:
+        return value * 1000
+    if 'meter' in distance_label or distance_label.endswith('m'):
+        return value
+
+    return value
+
+
+def load_location_matrix():
+    apartments_df = pd.read_csv(APARTMENTS_PATH)
+    location_matrix = {}
+
+    for _, row in apartments_df.iterrows():
+        if row.get('PropertyName') == 'PropertyName' or row.get('LocationAdvantages') == 'LocationAdvantages':
+            continue
+
+        distances = {}
+        try:
+            location_advantages = ast.literal_eval(row['LocationAdvantages'])
+        except (ValueError, SyntaxError):
+            continue
+
+        for location, distance in location_advantages.items():
+            distances[location] = distance_to_meters(distance)
+
+        location_matrix[row['PropertyName']] = distances
+
+    return pd.DataFrame.from_dict(location_matrix, orient='index')
+
+
+location_df = load_location_matrix()
+
+with open(COSINE_SIM1_PATH, 'rb') as file:
+    cosine_sim1 = pickle.load(file)
+
+with open(COSINE_SIM2_PATH, 'rb') as file:
+    cosine_sim2 = pickle.load(file)
+
+with open(COSINE_SIM3_PATH, 'rb') as file:
+    cosine_sim3 = pickle.load(file)
 
 
 def recommend_properties_with_scores(property_name, top_n=5):
@@ -36,10 +95,6 @@ def recommend_properties_with_scores(property_name, top_n=5):
     })
 
     return recommendations_df
-
-
-# Test the recommender function using a property name
-recommend_properties_with_scores('DLF The Camellias')
 
 
 st.title('Select Location and Radius')
