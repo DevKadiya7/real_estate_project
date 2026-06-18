@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import pickle
+from pathlib import Path
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -10,11 +11,19 @@ st.set_page_config(page_title="Plotting Demo")
 
 st.title('Analytics')
 
-new_df = pd.read_csv('datasets/data_viz1.csv')
-feature_text = pickle.load(open('datasets/feature_text.pkl','rb'))
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATA_PATH = BASE_DIR / 'datasets' / 'data_viz1.csv'
+FEATURE_TEXT_PATH = BASE_DIR / 'datasets' / 'feature_text.pkl'
 
+new_df = pd.read_csv(DATA_PATH)
+with open(FEATURE_TEXT_PATH, 'rb') as file:
+    feature_text = pickle.load(file)
 
-group_df = new_df.groupby('sector').mean()[['price','price_per_sqft','built_up_area','latitude','longitude']]
+numeric_cols = ['price', 'price_per_sqft', 'built_up_area', 'latitude', 'longitude']
+for column in numeric_cols:
+    new_df[column] = pd.to_numeric(new_df[column], errors='coerce')
+
+group_df = new_df.groupby('sector')[numeric_cols].mean()
 
 st.header('Sector Price per Sqft Geomap')
 fig = px.scatter_mapbox(group_df, lat="latitude", lon="longitude", color="price_per_sqft", size='built_up_area',
