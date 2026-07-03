@@ -11,10 +11,20 @@ const fetchJson = async (path, options) => {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.detail || 'Request failed')
+    // Log the full error for debugging in browser console
+    console.error('API Error', response.status, path, error)
+    // Normalize different FastAPI error shapes
+    const msg =
+      typeof error?.detail === 'string'
+        ? error.detail
+        : error?.detail
+        ? JSON.stringify(error.detail)
+        : JSON.stringify(error)
+    throw new Error(msg || 'Request failed')
   }
 
-  return response.json()
+  const json = await response.json().catch(() => null)
+  return json
 }
 
 const emptyPredictForm = {
@@ -171,12 +181,16 @@ function App() {
       setPredictResult(null)
 
       try {
+        // Log payload for debugging
+        console.log('Predict payload', predictForm)
         const result = await fetchJson('/api/predict', {
           method: 'POST',
           body: JSON.stringify(predictForm),
         })
+        console.log('Predict response', result)
         setPredictResult(result)
       } catch (error) {
+        console.error('Predict error', error)
         setPredictError(error.message)
       }
     }
