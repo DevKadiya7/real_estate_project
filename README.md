@@ -1,6 +1,5 @@
-# Gurgaon Real Estate Migration
+# Gurgaon Real Estate 
 
-The original Streamlit app remains in `streamlit_app/`, but the migration target is now split into:
 
 - `backend/` for FastAPI model inference and data endpoints
 - `frontend/` for the React UI

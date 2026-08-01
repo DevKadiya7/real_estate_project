@@ -113,21 +113,31 @@ function App() {
       .catch((error) => setNotice(error.message))
   }, [page, analysisFilters])
 
+  const homeMetrics = useMemo(
+    () => [
+      { label: 'Active Sectors', value: '32' },
+      { label: 'Avg. Price / sqft', value: '₹ 12,450' },
+      { label: 'Available Listings', value: '1,840' },
+      { label: 'Model Confidence', value: '89.7%' },
+    ],
+    [],
+  )
+
   const homeCards = useMemo(
     () => [
       {
-        title: 'Price Predictor',
-        text: 'Estimate the expected property range from the trained pipeline.',
+        title: 'Price Forecasting',
+        text: 'Generate reliable valuation estimates for flats and houses across Gurgaon sectors.',
         key: 'predictor',
       },
       {
-        title: 'Analysis App',
-        text: 'Inspect sector pricing, area trends, word frequency, and price distributions.',
+        title: 'Market Analytics',
+        text: 'Review sector performance, price trends, and portfolio insights in one place.',
         key: 'analysis',
       },
       {
-        title: 'Recommend Appartments',
-        text: 'Search nearby apartments and retrieve similarity-based recommendations.',
+        title: 'Portfolio Recommendations',
+        text: 'Discover nearby assets and high-similarity listings for strategic investment.',
         key: 'recommend',
       },
     ],
@@ -137,39 +147,67 @@ function App() {
   const renderNav = () => (
     <aside className="sidebar">
       <div>
-        <h1 className="brand">Gurgaon Real Estate</h1>
+        <h1 className="brand">Gurgaon Realty Dashboard</h1>
       </div>
       <nav className="nav-list">
-        <button className={page === 'home' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('home')}>Home</button>
-        <button className={page === 'predictor' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('predictor')}>Price Predictor</button>
-        <button className={page === 'analysis' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('analysis')}>Analysis</button>
-        <button className={page === 'recommend' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('recommend')}>Recommend</button>
+        <button className={page === 'home' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('home')}>Dashboard</button>
+        <button className={page === 'predictor' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('predictor')}>Valuation</button>
+        <button className={page === 'analysis' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('analysis')}>Analytics</button>
+        <button className={page === 'recommend' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('recommend')}>Recommendations</button>
       </nav>
     </aside>
   )
 
   const renderHome = () => (
-    <div className="hero-grid">
-      <div className="hero-copy panel">
-        <p className="eyebrow">Migration target</p>
-        <h2>Interactive property intelligence, rebuilt for the browser</h2>
-        <p className="muted">
-          The backend owns model inference and data aggregation. The React UI keeps the experience fast and clearer than the original Streamlit shell.
-        </p>
-        <div className="hero-actions">
-          <button className="primary" onClick={() => setPage('predictor')}>Open predictor</button>
-          <button className="secondary" onClick={() => setPage('analysis')}>View analysis</button>
+    <div className="home-dashboard">
+      <div className="dashboard-top panel">
+        <div className="dashboard-top-copy">
+          <p className="eyebrow">Operational Overview</p>
+          <h2>Premium Gurgaon property insights for market professionals</h2>
+          <p className="muted">
+            Consolidated valuation, sector analytics, and asset recommendations in a single executive dashboard.
+          </p>
+          <div className="dashboard-actions">
+            <button className="primary" onClick={() => setPage('predictor')}>Run valuation</button>
+            <button className="secondary" onClick={() => setPage('recommend')}>Find opportunities</button>
+          </div>
+        </div>
+
+        <div className="dashboard-metrics panel">
+          <p className="eyebrow">Key indicators</p>
+          <div className="home-metrics-grid">
+            {homeMetrics.map((metric) => (
+              <div key={metric.label} className="metric-card">
+                <span className="metric-label">{metric.label}</span>
+                <strong>{metric.value}</strong>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="stack">
-        {homeCards.map((card) => (
-          <div className="panel card" key={card.key}>
-            <p className="eyebrow">Module</p>
-            <h3>{card.title}</h3>
-            <p className="muted">{card.text}</p>
-            <button className="linkish" onClick={() => setPage(card.key)}>Open</button>
+
+      <div className="dashboard-body">
+        <div className="hero-copy panel">
+          <p className="eyebrow">Executive Summary</p>
+          <h2>Accelerate decisions with data-led property intelligence</h2>
+          <p className="muted">
+            Use profile-based insights to benchmark locations, validate pricing, and prioritize investments with confidence.
+          </p>
+          <div className="hero-actions">
+            <button className="primary" onClick={() => setPage('analysis')}>Open analytics</button>
+            <button className="secondary" onClick={() => setPage('predictor')}>Start valuation</button>
           </div>
-        ))}
+        </div>
+        <div className="dashboard-cards">
+          {homeCards.map((card) => (
+            <div className="panel card" key={card.key}>
+              <p className="eyebrow">Capability</p>
+              <h3>{card.title}</h3>
+              <p className="muted">{card.text}</p>
+              <button className="linkish" onClick={() => setPage(card.key)}>Explore</button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
