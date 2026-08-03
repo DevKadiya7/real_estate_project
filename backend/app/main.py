@@ -27,6 +27,11 @@ COSINE_SIM1_PATH = DATASET_DIR / "cosine_sim1.pkl"
 COSINE_SIM2_PATH = DATASET_DIR / "cosine_sim2.pkl"
 COSINE_SIM3_PATH = DATASET_DIR / "cosine_sim3.pkl"
 
+app = FastAPI()
+
+@app.get("/")
+def home():
+    return {"message": "Real Estate API is running successfully!"}
 
 def read_pickle(path: Path) -> Any:
     with open(path, "rb") as file:
