@@ -1,33 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import Plot from 'react-plotly.js'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Footer from './components/Footer'
+import Navbar from './components/Navbar'
+import { ErrorMessage } from './components/ErrorMessage'
+import AnalyticsPage from './pages/AnalyticsPage'
+import HomePage from './pages/HomePage'
+import PredictorPage from './pages/PredictorPage'
+import RecommendationsPage from './pages/RecommendationsPage'
+import { getAreaVsPrice, getBedroomPie, getFeatureText, getNearbyProperties, getRecommendations, getSectorStats, predictPrice } from './services/api'
+import { useMetadata } from './hooks/useMetadata'
+import { validateNearbySearch, validatePredictionForm, validateRecommendationForm } from './utils/validation'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
-
-const fetchJson = async (path, options) => {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    // Log the full error for debugging in browser console
-    console.error('API Error', response.status, path, error)
-    // Normalize different FastAPI error shapes
-    const msg =
-      typeof error?.detail === 'string'
-        ? error.detail
-        : error?.detail
-        ? JSON.stringify(error.detail)
-        : JSON.stringify(error)
-    throw new Error(msg || 'Request failed')
-  }
-
-  const json = await response.json().catch(() => null)
-  return json
-}
-
-const emptyPredictForm = {
+const initialPredictionForm = {
   property_type: 'flat',
   sector: '',
   bedRoom: 1,
@@ -42,363 +25,300 @@ const emptyPredictForm = {
   floor_category: '',
 }
 
-const SectionShell = ({ eyebrow, title, description, children, action }) => (
-  <section className="panel">
-    <div className="panel-head">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h2>{title}</h2>
-        {description ? <p className="muted">{description}</p> : null}
-      </div>
-      {action}
-    </div>
-    {children}
-  </section>
-)
-
-const StatCard = ({ label, value }) => (
-  <div className="stat-card">
-    <span>{label}</span>
-    <strong>{value}</strong>
-  </div>
-)
+const initialRecommendationForm = {
+  location: '',
+  radius_km: 5,
+  apartment: '',
+}
 
 function App() {
-  const [page, setPage] = useState('home')
-  const [options, setOptions] = useState(null)
-  const [loadingOptions, setLoadingOptions] = useState(true)
-  const [predictForm, setPredictForm] = useState(emptyPredictForm)
-  const [predictResult, setPredictResult] = useState(null)
-  const [predictError, setPredictError] = useState('')
-  const [analysis, setAnalysis] = useState({ sectorStats: [], featureText: '', areaData: [], bedroomPie: null })
-  const [analysisFilters, setAnalysisFilters] = useState({ property_type: 'flat', sector: 'overall' })
-  const [recommendation, setRecommendation] = useState({ location: '', radius_km: 5, apartment: '' })
-  const [nearby, setNearby] = useState([])
+  const [activePage, setActivePage] = useState('home')
+  const [predictionForm, setPredictionForm] = useState(initialPredictionForm)
+  const [predictionResult, setPredictionResult] = useState(null)
+  const [predictionLoading, setPredictionLoading] = useState(false)
+  const [predictionError, setPredictionError] = useState('')
+
+  const [analytics, setAnalytics] = useState({ sectorStats: [], featureText: '', areaData: [], bedroomPie: null })
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [analyticsError, setAnalyticsError] = useState('')
+  const [analyticsFilters, setAnalyticsFilters] = useState({ property_type: 'flat', sector: 'overall' })
+
+  const [recommendationForm, setRecommendationForm] = useState(initialRecommendationForm)
+  const [nearbyProperties, setNearbyProperties] = useState([])
+  const [nearbyLoading, setNearbyLoading] = useState(false)
+  const [nearbyError, setNearbyError] = useState('')
   const [recommendations, setRecommendations] = useState([])
-  const [notice, setNotice] = useState('')
+  const [recommendationLoading, setRecommendationLoading] = useState(false)
+  const [recommendationError, setRecommendationError] = useState('')
+
+  const { options, loading: metadataLoading, error: metadataError } = useMetadata()
 
   useEffect(() => {
-    fetchJson('/api/metadata/options')
-      .then((data) => {
-        setOptions(data)
-        setPredictForm((current) => ({
-          ...current,
-          sector: data.sectors?.[0] || '',
-          agePossession: data.ages?.[0] || '',
-          luxury_category: data.luxury_categories?.[0] || '',
-          floor_category: data.floor_categories?.[0] || '',
-        }))
-        setRecommendation((current) => ({
-          ...current,
-          location: data.locations?.[0] || '',
-          apartment: data.apartments?.[0] || '',
-        }))
-      })
-      .catch((error) => setNotice(error.message))
-      .finally(() => setLoadingOptions(false))
-  }, [])
+    if (!options) {
+      return
+    }
+
+    setPredictionForm((current) => ({
+      ...current,
+      sector: current.sector || options.sectors?.[0] || '',
+      agePossession: current.agePossession || options.ages?.[0] || '',
+      luxury_category: current.luxury_category || options.luxury_categories?.[0] || '',
+      floor_category: current.floor_category || options.floor_categories?.[0] || '',
+    }))
+
+    setRecommendationForm((current) => ({
+      ...current,
+      location: current.location || options.locations?.[0] || '',
+      apartment: current.apartment || options.apartments?.[0] || '',
+    }))
+  }, [options])
 
   useEffect(() => {
-    if (page !== 'analysis') return
+    if (activePage !== 'analysis') {
+      return undefined
+    }
 
-    Promise.all([
-      fetchJson('/api/analytics/sector-stats'),
-      fetchJson('/api/analytics/feature-text'),
-      fetchJson(`/api/analytics/area-vs-price?property_type=${analysisFilters.property_type}`),
-      fetchJson(`/api/analytics/bedroom-pie?sector=${encodeURIComponent(analysisFilters.sector)}`),
-    ])
-      .then(([sectorStats, featureText, areaData, bedroomPie]) => {
-        setAnalysis({ sectorStats, featureText: featureText.text, areaData, bedroomPie })
-      })
-      .catch((error) => setNotice(error.message))
-  }, [page, analysisFilters])
+    let cancelled = false
 
-  const homeMetrics = useMemo(
-    () => [
-      { label: 'Active Sectors', value: '32' },
-      { label: 'Avg. Price / sqft', value: '₹ 12,450' },
-      { label: 'Available Listings', value: '1,840' },
-      { label: 'Model Confidence', value: '89.7%' },
-    ],
-    [],
-  )
-
-  const homeCards = useMemo(
-    () => [
-      {
-        title: 'Price Forecasting',
-        text: 'Generate reliable valuation estimates for flats and houses across Gurgaon sectors.',
-        key: 'predictor',
-      },
-      {
-        title: 'Market Analytics',
-        text: 'Review sector performance, price trends, and portfolio insights in one place.',
-        key: 'analysis',
-      },
-      {
-        title: 'Portfolio Recommendations',
-        text: 'Discover nearby assets and high-similarity listings for strategic investment.',
-        key: 'recommend',
-      },
-    ],
-    [],
-  )
-
-  const renderNav = () => (
-    <aside className="sidebar">
-      <div>
-        <h1 className="brand">Gurgaon Realty Dashboard</h1>
-      </div>
-      <nav className="nav-list">
-        <button className={page === 'home' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('home')}>Dashboard</button>
-        <button className={page === 'predictor' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('predictor')}>Valuation</button>
-        <button className={page === 'analysis' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('analysis')}>Analytics</button>
-        <button className={page === 'recommend' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('recommend')}>Recommendations</button>
-      </nav>
-    </aside>
-  )
-
-  const renderHome = () => (
-    <div className="home-dashboard">
-      <div className="dashboard-top panel">
-        <div className="dashboard-top-copy">
-          <p className="eyebrow">Operational Overview</p>
-          <h2>Premium Gurgaon property insights for market professionals</h2>
-          <p className="muted">
-            Consolidated valuation, sector analytics, and asset recommendations in a single executive dashboard.
-          </p>
-          <div className="dashboard-actions">
-            <button className="primary" onClick={() => setPage('predictor')}>Run valuation</button>
-            <button className="secondary" onClick={() => setPage('recommend')}>Find opportunities</button>
-          </div>
-        </div>
-
-        <div className="dashboard-metrics panel">
-          <p className="eyebrow">Key indicators</p>
-          <div className="home-metrics-grid">
-            {homeMetrics.map((metric) => (
-              <div key={metric.label} className="metric-card">
-                <span className="metric-label">{metric.label}</span>
-                <strong>{metric.value}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-body">
-        <div className="hero-copy panel">
-          <p className="eyebrow">Executive Summary</p>
-          <h2>Accelerate decisions with data-led property intelligence</h2>
-          <p className="muted">
-            Use profile-based insights to benchmark locations, validate pricing, and prioritize investments with confidence.
-          </p>
-          <div className="hero-actions">
-            <button className="primary" onClick={() => setPage('analysis')}>Open analytics</button>
-            <button className="secondary" onClick={() => setPage('predictor')}>Start valuation</button>
-          </div>
-        </div>
-        <div className="dashboard-cards">
-          {homeCards.map((card) => (
-            <div className="panel card" key={card.key}>
-              <p className="eyebrow">Capability</p>
-              <h3>{card.title}</h3>
-              <p className="muted">{card.text}</p>
-              <button className="linkish" onClick={() => setPage(card.key)}>Explore</button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderPredictor = () => {
-    const submit = async (event) => {
-      event.preventDefault()
-      setPredictError('')
-      setPredictResult(null)
+    const loadAnalytics = async () => {
+      setAnalyticsLoading(true)
+      setAnalyticsError('')
 
       try {
-        // Log payload for debugging
-        console.log('Predict payload', predictForm)
-        const result = await fetchJson('/api/predict', {
-          method: 'POST',
-          body: JSON.stringify(predictForm),
-        })
-        console.log('Predict response', result)
-        setPredictResult(result)
+        const [sectorStats, featureText, areaData, bedroomPie] = await Promise.all([
+          getSectorStats(),
+          getFeatureText(),
+          getAreaVsPrice(analyticsFilters.property_type),
+          getBedroomPie(analyticsFilters.sector),
+        ])
+
+        if (!cancelled) {
+          setAnalytics({
+            sectorStats,
+            featureText: featureText.text,
+            areaData,
+            bedroomPie,
+          })
+        }
       } catch (error) {
-        console.error('Predict error', error)
-        setPredictError(error.message)
+        if (!cancelled) {
+          setAnalyticsError(error.message)
+        }
+      } finally {
+        if (!cancelled) {
+          setAnalyticsLoading(false)
+        }
       }
     }
 
-    const updateField = (name, value) => setPredictForm((current) => ({ ...current, [name]: value }))
+    loadAnalytics()
 
-    return (
-      <SectionShell
-        eyebrow="Prediction"
-        title="Price Predictor"
-        description="Fill in the property details and get the estimated range from the backend pipeline."
-      >
-        {loadingOptions ? <p className="muted">Loading form options...</p> : null}
-        <form className="form-grid" onSubmit={submit}>
-          <label><span>Property Type</span><select value={predictForm.property_type} onChange={(e) => updateField('property_type', e.target.value)}><option value="flat">flat</option><option value="house">house</option></select></label>
-          <label><span>Sector</span><select value={predictForm.sector} onChange={(e) => updateField('sector', e.target.value)}>{options?.sectors?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label><span>Bedrooms</span><input type="number" step="0.5" value={predictForm.bedRoom} onChange={(e) => updateField('bedRoom', Number(e.target.value))} /></label>
-          <label><span>Bathrooms</span><input type="number" step="0.5" value={predictForm.bathroom} onChange={(e) => updateField('bathroom', Number(e.target.value))} /></label>
-          <label><span>Balconies</span><input type="number" step="1" value={predictForm.balcony} onChange={(e) => updateField('balcony', Number(e.target.value))} /></label>
-          <label><span>Age Possession</span><select value={predictForm.agePossession} onChange={(e) => updateField('agePossession', e.target.value)}>{options?.ages?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label><span>Built Up Area</span><input type="number" step="1" value={predictForm.built_up_area} onChange={(e) => updateField('built_up_area', Number(e.target.value))} /></label>
-          <label><span>Servant Room</span><input type="number" step="1" value={predictForm.servant_room} onChange={(e) => updateField('servant_room', Number(e.target.value))} /></label>
-          <label><span>Store Room</span><input type="number" step="1" value={predictForm.store_room} onChange={(e) => updateField('store_room', Number(e.target.value))} /></label>
-          <label><span>Furnishing Type</span><select value={predictForm.furnishing_type} onChange={(e) => updateField('furnishing_type', Number(e.target.value))}>{options?.furnishing_types?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label><span>Luxury Category</span><select value={predictForm.luxury_category} onChange={(e) => updateField('luxury_category', e.target.value)}>{options?.luxury_categories?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label><span>Floor Category</span><select value={predictForm.floor_category} onChange={(e) => updateField('floor_category', e.target.value)}>{options?.floor_categories?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <div className="form-actions"><button className="primary" type="submit">Predict</button></div>
-        </form>
-        {predictError ? <p className="error-box">{predictError}</p> : null}
-        {predictResult ? (
-          <div className="result-grid">
-            <StatCard label="Property Type" value={predictResult.property_type} />
-            <StatCard label="Estimated Low" value={`${predictResult.low} ${predictResult.unit}`} />
-            <StatCard label="Estimated High" value={`${predictResult.high} ${predictResult.unit}`} />
-          </div>
-        ) : null}
-      </SectionShell>
-    )
-  }
+    return () => {
+      cancelled = true
+    }
+  }, [activePage, analyticsFilters.property_type, analyticsFilters.sector])
 
-  const renderAnalysis = () => {
-    const sectorStats = analysis.sectorStats || []
-    const scatterData = [
+  const menuItems = useMemo(
+    () => [
+      { id: 'home', label: 'Dashboard' },
+      { id: 'predictor', label: 'Valuation' },
+      { id: 'analysis', label: 'Analytics' },
+      { id: 'recommend', label: 'Recommendations' },
+    ],
+    [],
+  )
+
+  const metrics = useMemo(
+    () => [
+      { label: 'Active sectors', value: '32' },
+      { label: 'Available listings', value: '1,840' },
+      { label: 'Avg. price / sqft', value: '₹ 12,450' },
+      { label: 'Model confidence', value: '89.7%' },
+    ],
+    [],
+  )
+
+  const featureCards = useMemo(
+    () => [
       {
-        x: analysis.areaData.map((item) => item.built_up_area),
-        y: analysis.areaData.map((item) => item.price),
-        mode: 'markers',
-        type: 'scatter',
-        marker: { color: '#e85d75', size: 9, opacity: 0.75 },
-        text: analysis.areaData.map((item) => `BHK: ${item.bedRoom}`),
-        name: analysisFilters.property_type,
+        title: 'Price Forecasting',
+        description: 'Generate reliable valuation estimates for flats and houses across Gurgaon sectors.',
       },
-    ]
-
-    const pieData = analysis.bedroomPie
-      ? [{ values: analysis.bedroomPie.values, labels: analysis.bedroomPie.labels, type: 'pie', hole: 0.4, marker: { colors: ['#ffb703', '#e85d75', '#6d597a', '#8ecae6'] } }]
-      : []
-
-    const mapData = [{
-      type: 'scattergeo',
-      mode: 'markers',
-      lat: sectorStats.map((item) => item.latitude),
-      lon: sectorStats.map((item) => item.longitude),
-      text: sectorStats.map((item) => item.sector),
-      marker: {
-        size: sectorStats.map((item) => Math.max(8, Math.min(24, (item.built_up_area || 0) / 100))),
-        color: sectorStats.map((item) => item.price_per_sqft),
-        colorscale: 'Portland',
-        showscale: true,
-        colorbar: { title: 'Price / sqft' },
+      {
+        title: 'Market Analytics',
+        description: 'Review sector performance, price trends, and portfolio insights in one place.',
       },
-    }]
+      {
+        title: 'Portfolio Recommendations',
+        description: 'Discover nearby assets and high-similarity listings for strategic investment.',
+      },
+    ],
+    [],
+  )
 
-    return (
-      <div className="analysis-grid">
-        <SectionShell eyebrow="Analytics" title="Sector Pricing Map" description="Aggregated averages by sector.">
-          <Plot data={mapData} layout={{ height: 420, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', geo: { scope: 'asia', resolution: 50, showland: true, landcolor: '#f5f1ea', showcountries: true, countrycolor: '#cccccc' }, margin: { l: 0, r: 0, t: 0, b: 0 } }} config={{ displayModeBar: false, responsive: true }} style={{ width: '100%' }} />
-        </SectionShell>
+  const heroActions = useMemo(
+    () => [
+      { label: 'Run valuation', page: 'predictor', variant: 'primary' },
+      { label: 'Open analytics', page: 'analysis', variant: 'secondary' },
+    ],
+    [],
+  )
 
-        <div className="analysis-row">
-          <SectionShell eyebrow="Text" title="Feature Word Cloud" description="The backend returns the source text; you can render a word cloud client-side later.">
-            <div className="wordcloud-box">{analysis.featureText ? analysis.featureText.slice(0, 1200) + (analysis.featureText.length > 1200 ? '...' : '') : 'Loading wordcloud text...'}</div>
-          </SectionShell>
+  const handlePageChange = useCallback((page) => {
+    setActivePage(page)
+  }, [])
 
-          <SectionShell eyebrow="Trends" title="Area vs Price" description="Switch between flat and house data.">
-            <div className="chip-row">
-              <button className={analysisFilters.property_type === 'flat' ? 'chip active' : 'chip'} onClick={() => setAnalysisFilters((current) => ({ ...current, property_type: 'flat' }))}>Flat</button>
-              <button className={analysisFilters.property_type === 'house' ? 'chip active' : 'chip'} onClick={() => setAnalysisFilters((current) => ({ ...current, property_type: 'house' }))}>House</button>
-            </div>
-            <Plot data={scatterData} layout={{ height: 360, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', margin: { l: 40, r: 20, t: 20, b: 40 }, xaxis: { title: 'Built Up Area' }, yaxis: { title: 'Price' } }} config={{ displayModeBar: false, responsive: true }} style={{ width: '100%' }} />
-          </SectionShell>
-        </div>
+  const handlePredictionChange = useCallback((field, value) => {
+    setPredictionForm((current) => ({ ...current, [field]: value }))
+    setPredictionError('')
+    setPredictionResult(null)
+  }, [])
 
-        <div className="analysis-row">
-          <SectionShell eyebrow="Mix" title="BHK Distribution" description="Counts grouped by bedroom count.">
-            <div className="chip-row">
-              <button className={analysisFilters.sector === 'overall' ? 'chip active' : 'chip'} onClick={() => setAnalysisFilters((current) => ({ ...current, sector: 'overall' }))}>Overall</button>
-              {(options?.sectors || []).slice(0, 6).map((sector) => (
-                <button key={sector} className={analysisFilters.sector === sector ? 'chip active' : 'chip'} onClick={() => setAnalysisFilters((current) => ({ ...current, sector }))}>{sector}</button>
-              ))}
-            </div>
-            <Plot data={pieData} layout={{ height: 360, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', margin: { l: 20, r: 20, t: 20, b: 20 } }} config={{ displayModeBar: false, responsive: true }} style={{ width: '100%' }} />
-          </SectionShell>
-
-          <SectionShell eyebrow="Spread" title="BHK Price Comparison" description="A box plot-style view built from the aggregated dataset.">
-            <Plot data={[{ x: sectorStats.slice(0, 15).map((item) => item.sector), y: sectorStats.slice(0, 15).map((item) => item.price), type: 'box', marker: { color: '#6d597a' } }]} layout={{ height: 360, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', margin: { l: 40, r: 20, t: 20, b: 40 }, yaxis: { title: 'Price' } }} config={{ displayModeBar: false, responsive: true }} style={{ width: '100%' }} />
-          </SectionShell>
-        </div>
-      </div>
-    )
-  }
-
-  const renderRecommend = () => {
-    const submitNearby = async (event) => {
+  const handlePredictionSubmit = useCallback(
+    async (event) => {
       event.preventDefault()
-      const result = await fetchJson(`/api/recommend/nearby?location=${encodeURIComponent(recommendation.location)}&radius_km=${recommendation.radius_km}`)
-      setNearby(result)
-    }
 
-    const submitRecommend = async (event) => {
+      const validationErrors = validatePredictionForm(predictionForm)
+      if (validationErrors.length > 0) {
+        setPredictionError(validationErrors.join(' '))
+        return
+      }
+
+      setPredictionLoading(true)
+      setPredictionError('')
+      setPredictionResult(null)
+
+      try {
+        const result = await predictPrice(predictionForm)
+        setPredictionResult(result)
+      } catch (error) {
+        setPredictionError(error.message)
+      } finally {
+        setPredictionLoading(false)
+      }
+    },
+    [predictionForm],
+  )
+
+  const handleAnalyticsPropertyChange = useCallback((propertyType) => {
+    setAnalyticsFilters((current) => ({ ...current, property_type: propertyType }))
+  }, [])
+
+  const handleAnalyticsSectorChange = useCallback((sector) => {
+    setAnalyticsFilters((current) => ({ ...current, sector }))
+  }, [])
+
+  const handleRecommendationChange = useCallback((field, value) => {
+    setRecommendationForm((current) => ({ ...current, [field]: value }))
+    setNearbyError('')
+    setRecommendationError('')
+  }, [])
+
+  const handleNearbySubmit = useCallback(
+    async (event) => {
       event.preventDefault()
-      const result = await fetchJson('/api/recommend', {
-        method: 'POST',
-        body: JSON.stringify({ property_name: recommendation.apartment, top_n: 5 }),
-      })
-      setRecommendations(result)
-    }
 
-    return (
-      <div className="recommend-grid">
-        <SectionShell eyebrow="Search" title="Nearby Properties" description="Filter by location and radius in kilometers.">
-          <form className="form-grid compact" onSubmit={submitNearby}>
-            <label><span>Location</span><select value={recommendation.location} onChange={(e) => setRecommendation((current) => ({ ...current, location: e.target.value }))}>{options?.locations?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-            <label><span>Radius in Kms</span><input type="number" step="0.5" value={recommendation.radius_km} onChange={(e) => setRecommendation((current) => ({ ...current, radius_km: Number(e.target.value) }))} /></label>
-            <div className="form-actions"><button className="primary" type="submit">Search</button></div>
-          </form>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Property</th><th>Distance (km)</th></tr></thead>
-              <tbody>{nearby.map((item) => <tr key={item.property_name}><td>{item.property_name}</td><td>{item.distance_km}</td></tr>)}</tbody>
-            </table>
-          </div>
-        </SectionShell>
+      const validationErrors = validateNearbySearch(recommendationForm.location, recommendationForm.radius_km)
+      if (validationErrors.length > 0) {
+        setNearbyError(validationErrors.join(' '))
+        return
+      }
 
-        <SectionShell eyebrow="Similarity" title="Apartment Recommendations" description="Return the most similar apartments from the backend recommender.">
-          <form className="form-grid compact" onSubmit={submitRecommend}>
-            <label><span>Apartment</span><select value={recommendation.apartment} onChange={(e) => setRecommendation((current) => ({ ...current, apartment: e.target.value }))}>{options?.apartments?.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-            <div className="form-actions"><button className="primary" type="submit">Recommend</button></div>
-          </form>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Property</th><th>Similarity Score</th></tr></thead>
-              <tbody>{recommendations.map((item) => <tr key={item.PropertyName}><td>{item.PropertyName}</td><td>{Number(item.SimilarityScore).toFixed(3)}</td></tr>)}</tbody>
-            </table>
-          </div>
-        </SectionShell>
-      </div>
-    )
-  }
+      setNearbyLoading(true)
+      setNearbyError('')
+
+      try {
+        const result = await getNearbyProperties(recommendationForm.location, recommendationForm.radius_km)
+        setNearbyProperties(result)
+      } catch (error) {
+        setNearbyError(error.message)
+      } finally {
+        setNearbyLoading(false)
+      }
+    },
+    [recommendationForm.location, recommendationForm.radius_km],
+  )
+
+  const handleRecommendationSubmit = useCallback(
+    async (event) => {
+      event.preventDefault()
+
+      const validationErrors = validateRecommendationForm(recommendationForm.apartment)
+      if (validationErrors.length > 0) {
+        setRecommendationError(validationErrors.join(' '))
+        return
+      }
+
+      setRecommendationLoading(true)
+      setRecommendationError('')
+
+      try {
+        const result = await getRecommendations(recommendationForm.apartment, 5)
+        setRecommendations(result)
+      } catch (error) {
+        setRecommendationError(error.message)
+      } finally {
+        setRecommendationLoading(false)
+      }
+    },
+    [recommendationForm.apartment],
+  )
 
   return (
     <div className="app-shell">
-      {renderNav()}
-      <main className="content-area">
-        {notice ? <div className="notice">{notice}</div> : null}
-        {page === 'home' ? renderHome() : null}
-        {page === 'predictor' ? renderPredictor() : null}
-        {page === 'analysis' ? renderAnalysis() : null}
-        {page === 'recommend' ? renderRecommend() : null}
+      <Navbar activePage={activePage} menuItems={menuItems} onNavigate={handlePageChange} />
+
+      <main className="app-main">
+        {metadataError ? <ErrorMessage message={metadataError} /> : null}
+
+        {activePage === 'home' ? (
+          <HomePage metrics={metrics} featureCards={featureCards} heroActions={heroActions} onNavigate={handlePageChange} />
+        ) : null}
+
+        {activePage === 'predictor' ? (
+          <PredictorPage
+            form={predictionForm}
+            options={options}
+            loading={metadataLoading || predictionLoading}
+            result={predictionResult}
+            error={predictionError}
+            onChange={handlePredictionChange}
+            onSubmit={handlePredictionSubmit}
+            onNavigate={handlePageChange}
+          />
+        ) : null}
+
+        {activePage === 'analysis' ? (
+          <AnalyticsPage
+            options={options}
+            loading={metadataLoading || analyticsLoading}
+            error={analyticsError}
+            analytics={analytics}
+            filters={analyticsFilters}
+            onPropertyTypeChange={handleAnalyticsPropertyChange}
+            onSectorChange={handleAnalyticsSectorChange}
+            onNavigate={handlePageChange}
+          />
+        ) : null}
+
+        {activePage === 'recommend' ? (
+          <RecommendationsPage
+            options={options}
+            loading={metadataLoading || nearbyLoading || recommendationLoading}
+            nearbyProperties={nearbyProperties}
+            recommendations={recommendations}
+            form={recommendationForm}
+            nearbyError={nearbyError}
+            recommendationError={recommendationError}
+            onChange={handleRecommendationChange}
+            onNearbySubmit={handleNearbySubmit}
+            onRecommendationSubmit={handleRecommendationSubmit}
+            onNavigate={handlePageChange}
+          />
+        ) : null}
       </main>
+
+      <Footer />
     </div>
   )
 }
