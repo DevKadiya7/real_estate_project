@@ -1,8 +1,11 @@
 # Gurgaon Real Estate Intelligence
 
-A property-intelligence web app for Gurgaon real estate: price prediction, market
-analytics, and apartment recommendations. A FastAPI backend (Clean Architecture,
-config-driven) serves a React + Tailwind dashboard.
+A property-intelligence web app for Gurgaon real estate: AI price prediction, a
+market-analytics dashboard (real interactive map, 8 charts, filters), and
+amenity-enriched apartment recommendations. A FastAPI backend (Clean Architecture,
+config-driven) serves a React dashboard — Tailwind, React Router, React Query,
+Recharts, `react-leaflet`, Framer Motion, and hand-assembled shadcn-style
+(Radix + `cva`) components.
 
 ## Running the app
 
@@ -93,9 +96,10 @@ frontend/
 │   ├── pages/             # one file per route, composes feature components
 │   ├── features/           # dashboard / price-predictor / analytics / recommendations
 │   │   └── <feature>/{components,hooks,utils}
-│   │       # analytics/utils/aggregate.js computes every chart/map/sector-card
-│   │       # from one fetch (GET /api/analytics/properties) — filters recompute
-│   │       # instantly client-side, no per-filter backend round trip
+│   │       # analytics/components/charts/ holds the 8 chart components; GurgaonMap.jsx
+│   │       # + utils/mapHelpers.js drive the map. utils/aggregate.js computes every
+│   │       # chart/map/sector-card from one fetch (GET /api/analytics/properties) —
+│   │       # filters recompute instantly client-side, no per-filter backend round trip
 │   ├── components/          # cross-feature building blocks
 │   │   ├── ui/                # Button, Card, Table, SearchableSelect, Slider, Sheet, ...
 │   │   │                        (hand-assembled shadcn-style: Radix primitives + cva)
