@@ -4,3 +4,9 @@ pandas
 numpy
 python-multipart
 scikit-learn
+pydantic-settings
+python-dotenv
+
+# dev/test
+pytest
+httpx

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Node / frontend build output
+node_modules/
+dist/
+.vite/
+
+# Environment files
+.env
+.env.local
+*.env.local
+
+# Regenerable / runtime-generated data (see backend/scripts/regenerate_artifacts.py)
+data/cache/*
+data/database/*
+data/logs/*
+data/exports/*
+data/uploads/*
+!data/cache/.gitkeep
+!data/database/.gitkeep
+!data/logs/.gitkeep
+!data/exports/.gitkeep
+!data/uploads/.gitkeep
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/

@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: ThemeContext toggles `.dark` on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Brand accent reuses the dataviz categorical slot-1 blue so UI chrome and
+     charts read as one system. */
+  --color-brand-50: #eaf2fc;
+  --color-brand-100: #cde2fb;
+  --color-brand-200: #9ec5f4;
+  --color-brand-300: #6da7ec;
+  --color-brand-400: #3987e5;
+  --color-brand-500: #2a78d6;
+  --color-brand-600: #256abf;
+  --color-brand-700: #1c5cab;
+  --color-brand-800: #184f95;
+  --color-brand-900: #0d366b;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* Shared glass-card surface used across dashboard panels. */
+.glass-panel {
+  @apply rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur-xl;
+  @apply dark:border-slate-800/70 dark:bg-slate-900/60;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 300ms ease-out;
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 220ms ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 220ms ease-out;
+}
