@@ -126,6 +126,62 @@ Everything under `data_collection/`, `cleaned_datasets/`, `data_preprocessing/`,
 it stays at the repo root, untouched by the app. Only the files the running backend
 actually reads live under `data/`.
 
+## Machine learning pipeline
+
+The notebooks above are a real, sequential pipeline — each stage reads the previous
+stage's CSV output and writes the next one:
+
+1. **Collection** (`data_collection/`) — raw listings scraped into `flats.csv`,
+   `houses.csv`, `appartments.csv` (society-level facilities/price/location).
+2. **Per-source cleaning** (`data_preprocessing/data-preprocessing-{flats,houses}.ipynb`)
+   → merged (`merge-flats-and-house.ipynb`) → sector name normalization
+   (`data-preprocessing-level-2.ipynb`, ~100 colony names manually mapped to
+   canonical `sector N` labels).
+3. **Outlier treatment** (`data_cleaning_pipeline/outlier-treatment.ipynb`) — IQR-based
+   detection plus manual area-unit-scale fixes.
+4. **Missing-value imputation** (`data_cleaning_pipeline/missing-value-imputation.ipynb`)
+   — ratio-based `built_up_area` imputation from carpet/super-built-up area, median/mode
+   fills elsewhere.
+5. **Feature engineering** (`feature_engineering/feature-engineering.ipynb`) — parses
+   `built_up_area`/`carpet_area` out of free text; explodes room flags (servant/store/
+   study/pooja); buckets `agePossession`; clusters furnishing-item counts with
+   `KMeans(n_clusters=3)` into `furnishing_type`; computes **`luxury_score`** as a
+   `MultiLabelBinarizer` of ~100 amenities dot-producted with hand-authored weights
+   (4–10 each, e.g. Golf Course=10).
+6. **Feature selection** (`feature_selection/feature-selection.ipynb`) — bins
+   `luxury_score`→`luxury_category` and `floorNum`→`floor_category`; ranks features by
+   averaging 5 techniques (Random Forest / Gradient Boosting importances, permutation
+   importance, RFE, SHAP `TreeExplainer`), corroborated with a 5-fold CV R² drop-test;
+   drops the weakest columns.
+7. **Model selection** (`modelling/baseline model.ipynb` → `modelling/model-selection.ipynb`)
+   — compares Linear/Ridge/Lasso, SVR, Decision Tree, Random Forest, Extra Trees,
+   Gradient Boosting, AdaBoost, MLP, and XGBoost across 4 encoding strategies (Ordinal,
+   One-Hot, One-Hot+PCA, Target Encoding), all on `log1p(price)`, scored by 10-fold CV
+   R² and holdout MAE. Best: **Random Forest** with target-encoded `sector`
+   (CV R² ≈ 0.90, MAE ≈ ₹0.45 Cr); `GridSearchCV` tuned it to
+   `{max_depth: 20, max_features: 'sqrt', n_estimators: 300}`. The final exported
+   `pipeline.pkl` is `ColumnTransformer(OneHotEncoder) → RandomForestRegressor(n_estimators=500)`
+   trained on the full dataset, on this feature set: `property_type, sector, bedRoom,
+   bathroom, balcony, agePossession, built_up_area, servant room, store room,
+   furnishing_type, luxury_category, floor_category`.
+8. **Recommendations** (`recommender_system/recommender-system.ipynb`) — three
+   246×246 cosine-similarity matrices per society: **`cosine_sim1`** on TF-IDF
+   (`TfidfVectorizer`, 1-2 grams) of each society's `TopFacilities`; **`cosine_sim2`**
+   on one-hot-encoded + scaled per-BHK price/area ranges from `PriceDetails`;
+   **`cosine_sim3`** on scaled distances to nearby landmarks from `LocationAdvantages`.
+
+> **The notebooks' real trained Random Forest pipeline is not what's currently
+> deployed.** `backend/app/services/price_model.py`'s `SimplePriceModel` is a
+> deliberate lightweight placeholder (a linear heuristic on area/bedrooms/bathrooms),
+> not the notebooks' CV-tuned model — see `git log` / the refactor history for why.
+> To deploy the real model: export the notebook's fitted `pipeline` object to
+> `data/database/pipeline.pkl` (matching the feature set above) instead of running
+> `scripts/regenerate_artifacts.py`, which currently (re)writes the placeholder.
+> The three `cosine_sim*.pkl` files are similarly regenerated as a synthetic
+> area/bedroom-based placeholder by that script, not the notebook's TF-IDF/price/
+> location similarity — swap in real ones the same way if you need the notebook's
+> actual recommendation quality.
+
 ## Data-reality notes (read before "fixing" these)
 
 A few things on the Analysis page look like simplifications because they are —
