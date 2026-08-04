@@ -157,13 +157,17 @@ stage's CSV output and writes the next one:
    — compares Linear/Ridge/Lasso, SVR, Decision Tree, Random Forest, Extra Trees,
    Gradient Boosting, AdaBoost, MLP, and XGBoost across 4 encoding strategies (Ordinal,
    One-Hot, One-Hot+PCA, Target Encoding), all on `log1p(price)`, scored by 10-fold CV
-   R² and holdout MAE. Best: **Random Forest** with target-encoded `sector`
-   (CV R² ≈ 0.90, MAE ≈ ₹0.45 Cr); `GridSearchCV` tuned it to
+   R² and holdout MAE. With target-encoded `sector`, the top three were essentially
+   tied: **Extra Trees** (CV R² ≈ 0.9023, MAE ≈ ₹0.457 Cr), **XGBoost**
+   (CV R² ≈ 0.9006, MAE ≈ ₹0.483 Cr), and **Random Forest** (CV R² ≈ 0.9005,
+   MAE ≈ ₹0.454 Cr) — `GridSearchCV` tuned the last of those to
    `{max_depth: 20, max_features: 'sqrt', n_estimators: 300}`. The final exported
    `pipeline.pkl` is `ColumnTransformer(OneHotEncoder) → RandomForestRegressor(n_estimators=500)`
    trained on the full dataset, on this feature set: `property_type, sector, bedRoom,
    bathroom, balcony, agePossession, built_up_area, servant room, store room,
-   furnishing_type, luxury_category, floor_category`.
+   furnishing_type, luxury_category, floor_category`. XGBoost was never exported to
+   a `.pkl` in the notebooks — if you want to try deploying it instead, that model
+   still needs to be trained and serialized first.
 8. **Recommendations** (`recommender_system/recommender-system.ipynb`) — three
    246×246 cosine-similarity matrices per society: **`cosine_sim1`** on TF-IDF
    (`TfidfVectorizer`, 1-2 grams) of each society's `TopFacilities`; **`cosine_sim2`**
